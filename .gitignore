@@ -194,5 +194,3 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
-client_secret_sheets.json
-sheets_token.json
