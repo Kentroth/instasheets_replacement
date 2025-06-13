@@ -1,1 +1,2 @@
-worker: python shopify_sync.py
+worker: python your_main_script.py
+

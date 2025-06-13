@@ -5,8 +5,9 @@ __pycache__/
 
 # C extensions
 *.so
-sheets_token.json
 client_secret_sheets.json
+sheets_token.json
+
 
 # Distribution / packaging
 .Python
