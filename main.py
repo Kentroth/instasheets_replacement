@@ -114,41 +114,62 @@ def matches_criteria(order):
 
 
 def format_order_row(order):
-    attrs = {item['name']: item['value'] for item in order.get('note_attributes', [])}
-    name = f"{order['customer'].get('first_name', '')} {order['customer'].get('last_name', '')}".strip()
-    items = [f"{li['quantity']} x {li['title']}" for li in order['line_items']]
-    trays = [i for i in items if 'DINNER' in i or 'TRAY' in i or 'GIFT' in i]
-    addons = [i for i in items if i not in trays]
+    # Parse note attributes into a flat dict
+    attrs = {a['name']: a['value'] for a in order.get('note_attributes', [])}
 
-    address = order.get('shipping_address', {})
-    address_str = f"{name}  {address.get('address1', '')}\n{address.get('address2', '')}\n{address.get('city', '')}, {address.get('province_code', '')} {address.get('zip', '')} US, Phone: {address.get('phone', '')}"
+    # Extract customer name
+    customer = order.get('customer', {})
+    name = f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
 
+    # Extract line items
+    line_items = order.get('line_items', [])
+    items = [f"{li['quantity']} x {li['title']}" for li in line_items]
+
+    def is_tray(title):
+        title = title.upper()
+        return any(keyword in title for keyword in ["DINNER", "TRAY", "GIFT", "TABLE"])
+
+    trays = [f"{li['quantity']} x {li['title']}" for li in line_items if is_tray(li['title'])]
+    addons = [f"{li['quantity']} x {li['title']}" for li in line_items if not is_tray(li['title'])]
+
+    # Determine delivery vs pickup
     is_delivery = 'Delivery-Location-Id' in attrs
-    time_field = (
-        attrs.get('Delivery-Time')
-        if is_delivery else
-        attrs.get('Pickup-Time') or 'N/A'
-    )
+    delivery_type = 'delivery' if is_delivery else 'pickup'
+    time_str = attrs.get('Delivery-Time') if is_delivery else attrs.get('Pickup-Time') or 'N/A'
+    date_str = attrs.get('Delivery-Date') or attrs.get('Pickup-Date') or ''
+
+    # Format address
+    shipping = order.get('shipping_address', {})
+    address_lines = filter(None, [
+        name,
+        shipping.get('address1'),
+        shipping.get('address2'),
+        f"{shipping.get('city', '')}, {shipping.get('province_code', '')} {shipping.get('zip', '')}",
+        "US",
+        f"Phone: {shipping.get('phone', '')}"
+    ])
+    address_str = '  '.join(address_lines)
 
     return [
-        str(order['id']),  # ✅ Transaction ID fix here
-        f"#{order['order_number']}",
+        str(order.get('id')),
+        f"#{order.get('order_number')}",
         name,
         '; '.join(trays),
         '; '.join(addons),
-        attrs.get('Delivery-Date') or attrs.get('Pickup-Date'),
-        time_field,
+        date_str,
+        time_str,
         order.get('total_price', ''),
-        '',
+        '',  # Placeholder for manual override column or similar
         attrs.get('Gift Note', ''),
         attrs.get('Special Requests', ''),
         attrs.get('Delivery-Location-Id') or attrs.get('Pickup-Location-Id'),
-        'delivery' if is_delivery else 'pickup',
+        delivery_type,
         address_str,
         attrs.get('Delivery Fee', ''),
         attrs.get('Favor Tag', ''),
         '; '.join(items)
     ]
+
 
 
 
