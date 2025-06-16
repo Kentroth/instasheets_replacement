@@ -236,6 +236,32 @@ def duplicate_template(sheet_service, spreadsheet_id, new_title):
         }
     ).execute()
 
+def prune_old_tabs(sheet_service, spreadsheet_id, valid_tab_names):
+    """Delete tabs not in the valid list (usually date tabs within range)."""
+    spreadsheet = sheet_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+    requests = []
+
+    for sheet in spreadsheet.get("sheets", []):
+        title = sheet["properties"]["title"]
+        sheet_id = sheet["properties"]["sheetId"]
+
+        if title == "template":
+            continue  # keep the template tab
+
+        if title not in valid_tab_names:
+            print(f"🗑️ Deleting old tab: {title}")
+            requests.append({
+                "deleteSheet": {
+                    "sheetId": sheet_id
+                }
+            })
+
+    if requests:
+        sheet_service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"requests": requests}
+        ).execute()
+
 
 # === MAIN ===
 def main():
@@ -243,11 +269,12 @@ def main():
     creds = authenticate_with_oauth()
     sheet_service = build("sheets", "v4", credentials=creds)
 
-    rows_by_day = {}
     headers = ['Transaction ID', 'Order #', 'Name', 'Trays/Gifts', 'Add-ons', 'Date', 'Time', 'Amount', 'Refunded', 'Gift Note', 'Special Requests', 'Location', 'Pickup / Delivery', 'Address', 'Delivery Fee', 'Scheduled Delivery?', 'All Items']
+    valid_tab_names = set()
 
     print("Filtering matching orders...")
     match_count = 0
+
     for order in fetch_shopify_orders_streaming():
         print(f"\n--- Order #{order['order_number']} Tags ---")
         print(order.get("tags", ""))
@@ -273,13 +300,18 @@ def main():
             date_str = date_obj.strftime("%Y-%m-%d")
             print(f"  ✓ Match: Order #{order['order_number']} for date {date_str}")
 
-            # Upload this order immediately (includes header)
+            valid_tab_names.add(date_str)  # 🧠 track all touched tabs
             safe_upload(sheet_service, SPREADSHEET_ID, date_str, [headers, row])
 
-
-
-
     print(f"Total matching orders: {match_count}")
+
+    # 🗑️ Prune any tabs outside the 30-day window
+    cutoff = datetime.now() - timedelta(days=30)
+    recent_only = {d for d in valid_tab_names if datetime.strptime(d, "%Y-%m-%d") >= cutoff}
+    prune_old_tabs(sheet_service, SPREADSHEET_ID, recent_only)
+
+    print("Done.")
+
 
     print("Uploading to Google Sheets...")
     for date_str in sorted(rows_by_day.keys(), key=lambda x: datetime.strptime(x, "%Y-%m-%d")):
