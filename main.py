@@ -56,9 +56,9 @@ from googleapiclient.errors import HttpError
 
 
 # === FETCH SHOPIFY ORDERS ===
-def fetch_shopify_orders():
+def fetch_shopify_orders_streaming():
     now = datetime.utcnow()
-    start_date = now - timedelta(days=120)  # 4 months back
+    start_date = now - timedelta(days=120)
     start_date_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
 
     headers = {
@@ -66,7 +66,6 @@ def fetch_shopify_orders():
         'Content-Type': 'application/json',
     }
 
-    orders = []
     url = f"https://{SHOP}/admin/api/{API_VERSION}/orders.json?updated_at_min={start_date_str}&limit=250&status=any"
 
     while url:
@@ -74,10 +73,13 @@ def fetch_shopify_orders():
         if response.status_code != 200:
             print(f"Error: {response.status_code} - {response.text}")
             break
-        data = response.json()['orders']
+
+        data = response.json().get('orders', [])
         if not data:
             break
-        orders.extend(data)
+
+        for order in data:
+            yield order  # YIELD one order at a time
 
         link_header = response.headers.get('Link', '')
         next_url = None
@@ -88,7 +90,6 @@ def fetch_shopify_orders():
                 break
         url = next_url
 
-    return orders
 
 # === FILTER & FORMAT ===
 def matches_criteria(order):
@@ -118,28 +119,38 @@ def format_order_row(order):
     items = [f"{li['quantity']} x {li['title']}" for li in order['line_items']]
     trays = [i for i in items if 'DINNER' in i or 'TRAY' in i or 'GIFT' in i]
     addons = [i for i in items if i not in trays]
+
     address = order.get('shipping_address', {})
     address_str = f"{name}  {address.get('address1', '')}\n{address.get('address2', '')}\n{address.get('city', '')}, {address.get('province_code', '')} {address.get('zip', '')} US, Phone: {address.get('phone', '')}"
 
+    is_delivery = 'Delivery-Location-Id' in attrs
+    time_field = (
+        attrs.get('Delivery-Time')
+        if is_delivery else
+        attrs.get('Pickup-Time') or 'N/A'
+    )
+
     return [
-        'N/A',
+        str(order['id']),  # ✅ Transaction ID fix here
         f"#{order['order_number']}",
         name,
         '; '.join(trays),
         '; '.join(addons),
         attrs.get('Delivery-Date') or attrs.get('Pickup-Date'),
-        attrs.get('Delivery-Time') or 'N/A',
+        time_field,
         order.get('total_price', ''),
         '',
         attrs.get('Gift Note', ''),
         attrs.get('Special Requests', ''),
         attrs.get('Delivery-Location-Id') or attrs.get('Pickup-Location-Id'),
-        'delivery' if 'Delivery-Location-Id' in attrs else 'pickup',
+        'delivery' if is_delivery else 'pickup',
         address_str,
         attrs.get('Delivery Fee', ''),
         attrs.get('Favor Tag', ''),
         '; '.join(items)
     ]
+
+
 
 
 # === UPLOAD TO SHEETS ===
@@ -232,16 +243,12 @@ def main():
     creds = authenticate_with_oauth()
     sheet_service = build("sheets", "v4", credentials=creds)
 
-    print("Fetching orders from Shopify...")
-    orders = fetch_shopify_orders()
-    print(f"Total orders fetched: {len(orders)}")
-
     rows_by_day = {}
     headers = ['Transaction ID', 'Order #', 'Name', 'Trays/Gifts', 'Add-ons', 'Date', 'Time', 'Amount', 'Refunded', 'Gift Note', 'Special Requests', 'Location', 'Pickup / Delivery', 'Address', 'Delivery Fee', 'Scheduled Delivery?', 'All Items']
 
     print("Filtering matching orders...")
     match_count = 0
-    for order in orders:
+    for order in fetch_shopify_orders_streaming():
         print(f"\n--- Order #{order['order_number']} Tags ---")
         print(order.get("tags", ""))
 
@@ -249,22 +256,28 @@ def main():
             match_count += 1
             row = format_order_row(order)
             raw_date = row[5]
+
             if not raw_date:
                 print(f"⚠️ Skipping order #{order['order_number']} due to missing date.")
                 continue
+
             try:
-                date_obj = datetime.strptime(raw_date.replace('/', '-'), "%Y-%m-%d")  # attempt ISO with slashes fixed
+                date_obj = datetime.strptime(raw_date.replace('/', '-'), "%Y-%m-%d")
             except ValueError:
                 try:
-                    date_obj = datetime.strptime(raw_date.replace('/', '-'), "%m-%d-%Y")  # fallback to MM-DD-YYYY
+                    date_obj = datetime.strptime(raw_date.replace('/', '-'), "%m-%d-%Y")
                 except ValueError:
                     print(f"⚠️ Skipping order #{order['order_number']} due to invalid date format: {raw_date}")
                     continue
+
             date_str = date_obj.strftime("%Y-%m-%d")
             print(f"  ✓ Match: Order #{order['order_number']} for date {date_str}")
-            if date_str not in rows_by_day:
-                rows_by_day[date_str] = [headers]
-            rows_by_day[date_str].append(row)
+
+            # Upload this order immediately (includes header)
+            safe_upload(sheet_service, SPREADSHEET_ID, date_str, [headers, row])
+
+
+
 
     print(f"Total matching orders: {match_count}")
 
