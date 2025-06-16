@@ -284,61 +284,76 @@ def prune_old_tabs(sheet_service, spreadsheet_id, valid_tab_names):
         ).execute()
 
 
-# === MAIN ===
 def main():
     print("Authenticating with Google Sheets...")
     creds = authenticate_with_oauth()
     sheet_service = build("sheets", "v4", credentials=creds)
 
     headers = ['Transaction ID', 'Order #', 'Name', 'Trays/Gifts', 'Add-ons', 'Date', 'Time', 'Amount', 'Refunded', 'Gift Note', 'Special Requests', 'Location', 'Pickup / Delivery', 'Address', 'Delivery Fee', 'Scheduled Delivery?', 'All Items']
+    rows_by_day = {}
     valid_tab_names = set()
-
-    print("Filtering matching orders...")
     match_count = 0
 
+    print("Filtering matching orders...")
     for order in fetch_shopify_orders_streaming():
         print(f"\n--- Order #{order['order_number']} Tags ---")
         print(order.get("tags", ""))
 
-        if matches_criteria(order):
-            match_count += 1
-            row = format_order_row(order)
-            raw_date = row[5]
+        if not matches_criteria(order):
+            continue
 
-            if not raw_date:
-                print(f"⚠️ Skipping order #{order['order_number']} due to missing date.")
+        row = format_order_row(order)
+        raw_date = row[5]
+
+        if not raw_date:
+            print(f"⚠️ Skipping order #{order['order_number']} due to missing date.")
+            continue
+
+        try:
+            date_obj = datetime.strptime(raw_date.replace('/', '-'), "%Y-%m-%d")
+        except ValueError:
+            try:
+                date_obj = datetime.strptime(raw_date.replace('/', '-'), "%m-%d-%Y")
+            except ValueError:
+                print(f"⚠️ Skipping order #{order['order_number']} due to invalid date format: {raw_date}")
                 continue
 
-            try:
-                date_obj = datetime.strptime(raw_date.replace('/', '-'), "%Y-%m-%d")
-            except ValueError:
-                try:
-                    date_obj = datetime.strptime(raw_date.replace('/', '-'), "%m-%d-%Y")
-                except ValueError:
-                    print(f"⚠️ Skipping order #{order['order_number']} due to invalid date format: {raw_date}")
-                    continue
+        date_str = date_obj.strftime("%Y-%m-%d")
+        print(f"  ✓ Match: Order #{order['order_number']} for date {date_str}")
 
-            date_str = date_obj.strftime("%Y-%m-%d")
-            print(f"  ✓ Match: Order #{order['order_number']} for date {date_str}")
+        if date_str not in rows_by_day:
+            rows_by_day[date_str] = [headers]
+        rows_by_day[date_str].append(row)
+        valid_tab_names.add(date_str)
+        match_count += 1
 
-            valid_tab_names.add(date_str)  # 🧠 track all touched tabs
-            safe_upload(sheet_service, SPREADSHEET_ID, date_str, [headers, row])
+    print(f"\nTotal matching orders: {match_count}")
 
-    print(f"Total matching orders: {match_count}")
+    # Ensure all needed tabs exist before uploading
+    print("\nEnsuring all tabs exist in order...")
+    existing_tabs = sheet_service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+    existing_titles = [s['properties']['title'] for s in existing_tabs['sheets']]
 
-    # 🗑️ Prune any tabs outside the 30-day window
-    cutoff = datetime.now() - timedelta(days=30)
-    recent_only = {d for d in valid_tab_names if datetime.strptime(d, "%Y-%m-%d") >= cutoff}
-    prune_old_tabs(sheet_service, SPREADSHEET_ID, recent_only)
+    for date_str in sorted(rows_by_day.keys()):
+        if date_str not in existing_titles:
+            print(f"  Creating tab: {date_str}")
+            duplicate_template(sheet_service, SPREADSHEET_ID, date_str)
 
-    print("Done.")
-
-
-    print("Uploading to Google Sheets...")
+    # Upload all data to the correct tabs in sorted order
+    print("\nUploading to Google Sheets...")
     for date_str in sorted(rows_by_day.keys(), key=lambda x: datetime.strptime(x, "%Y-%m-%d")):
         rows = rows_by_day[date_str]
         safe_upload(sheet_service, SPREADSHEET_ID, date_str, rows)
         time.sleep(2.5)
+
+    # Prune any tabs outside the 30-day window
+    print("\nPruning old tabs...")
+    cutoff = datetime.now() - timedelta(days=30)
+    recent_only = {d for d in valid_tab_names if datetime.strptime(d, "%Y-%m-%d") >= cutoff}
+    prune_old_tabs(sheet_service, SPREADSHEET_ID, recent_only)
+
+    print("✅ All done.")
+
 
 
 
