@@ -351,7 +351,12 @@ def main():
     creds = authenticate_with_oauth()
     sheet_service = build("sheets", "v4", credentials=creds)
 
-    headers = ['Transaction ID', 'Order #', 'Name', 'Trays/Gifts', 'Add-ons', 'Date', 'Time', 'Amount', 'Refunded', 'Gift Note', 'Special Requests', 'Location', 'Pickup / Delivery', 'Address', 'Delivery Fee', 'Scheduled Delivery?', 'All Items']
+    headers = [
+    'Transaction ID', 'Order #', 'Customer Name', 'Shipping Name', 'Trays/Gifts', 'Add-ons',
+    'Date', 'Time', 'Amount', 'Refunded', 'Gift Note', 'Special Requests', 'Location',
+    'Pickup / Delivery', 'Address', 'Delivery Fee', 'Scheduled Delivery?', 'Tip Amount',
+    'All Items', 'Financial Status', 'Fulfillment Status'
+    ]
     rows_by_day = {}
     valid_tab_names = set()
     match_count = 0
