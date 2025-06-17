@@ -372,19 +372,26 @@ def main():
             continue
 
         row = format_order_row(order)
-        raw_date = row[5]
+        raw_date = row[6]
 
-        if not raw_date:
-            print(f"⚠️ Skipping order #{order['order_number']} due to missing date.")
+        # Use tag_date from matches_criteria to avoid re-parsing
+        tag_date = None
+        for tag in order.get("tags", "").split(","):
+            tag = tag.strip()
+            date_match = re.search(r"\d{2}[-/]\d{2}[-/]\d{4}", tag)
+            if date_match:
+                raw_date = date_match.group().replace('/', '-')
+                try:
+                    tag_date = datetime.strptime(raw_date, "%m-%d-%Y")
+                    break
+                except ValueError:
+                    continue
+
+        if not tag_date:
+            print(f"⚠️ Skipping order #{order['order_number']} due to missing/invalid tag date.")
             continue
 
-        try:
-            date_obj = datetime.strptime(raw_date.replace('/', '-'), "%m-%d-%Y")
-        except ValueError:
-            print(f"⚠️ Skipping order #{order['order_number']} due to invalid date format: {raw_date}")
-            continue
-
-        date_str = date_obj.strftime("%m-%d-%Y")  # Match tagged format
+        date_str = tag_date.strftime("%Y-%m-%d")
         print(f"  ✓ Match: Order #{order['order_number']} for date {date_str}")
 
         if date_str not in rows_by_day:
@@ -392,7 +399,6 @@ def main():
         rows_by_day[date_str].append(row)
         valid_tab_names.add(date_str)
         match_count += 1
-
 
     print(f"\nTotal matching orders: {match_count}")
 
