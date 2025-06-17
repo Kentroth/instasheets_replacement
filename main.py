@@ -202,7 +202,6 @@ def format_order_row(order):
     date_str = attrs.get('Delivery-Date') or attrs.get('Pickup-Date') or ''
 
     # === Format shipping address ===
-    shipping = order.get('shipping_address', {})
     address_lines = filter(None, [
         shipping.get('address1'),
         shipping.get('address2'),
