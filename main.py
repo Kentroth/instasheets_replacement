@@ -121,10 +121,10 @@ def format_order_row(order):
     attrs = {a['name']: a['value'] for a in order.get('note_attributes', [])}
 
     # === Extract customer name and shipping name ===
-    customer = order.get('customer', {})
+    customer = order.get('customer') or {}
     customer_name = f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
 
-    shipping = order.get('shipping_address', {})
+    shipping = order.get('shipping_address') or {}
     shipping_name = shipping.get('name', '')
 
     # === Extract and format line items ===
