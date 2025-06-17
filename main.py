@@ -114,17 +114,29 @@ def matches_criteria(order):
 
 
 def format_order_row(order):
-    # Parse note attributes into a flat dict
+    # === Parse note attributes ===
     attrs = {a['name']: a['value'] for a in order.get('note_attributes', [])}
 
-    # Extract customer name
+    # === Extract customer name and shipping name ===
     customer = order.get('customer', {})
-    name = f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
+    customer_name = f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
 
-    # Extract line items
+    shipping = order.get('shipping_address', {})
+    shipping_name = shipping.get('name', '')
+
+    # === Extract and format line items ===
     line_items = order.get('line_items', [])
-    items = [f"{li['quantity']} x {li['title']}" for li in line_items]
+    items = [f"{li['quantity']} x {li['title']}" for li in line_items if li.get('name', '').strip().upper() != "TIP"]
 
+    # === Extract financial and fulfillment status ===
+    financial_status = order.get('financial_status', '')
+    fulfillment_status = order.get('fulfillment_status', '')
+
+    # === Extract Tip Amount ===
+    tip_item = next((li for li in line_items if li.get('name', '').strip().upper() == "TIP"), {})
+    tip_amount = tip_item.get('pre_tax_price', '')
+
+    # === Tray Identification Logic ===
     def is_tray(title):
         title = title.upper().strip()
 
@@ -175,33 +187,35 @@ def format_order_row(order):
 
         # Keyword fallback
         return any(keyword in title for keyword in tray_partial_keywords)
-    
+
+    # === Separate trays and add-ons ===
     trays = [f"{li['quantity']} x {li['title']}" for li in line_items if is_tray(li['title'])]
-    addons = [f"{li['quantity']} x {li['title']}" for li in line_items if not is_tray(li['title'])]
+    addons = [f"{li['quantity']} x {li['title']}" for li in line_items if not is_tray(li['title']) and li.get('name', '').strip().upper() != "TIP"]
 
-
-    # Determine delivery vs pickup
+    # === Determine delivery vs pickup ===
     is_delivery = 'Delivery-Location-Id' in attrs
     delivery_type = 'delivery' if is_delivery else 'pickup'
     time_str = attrs.get('Delivery-Time') if is_delivery else attrs.get('Pickup-Time') or 'N/A'
     date_str = attrs.get('Delivery-Date') or attrs.get('Pickup-Date') or ''
 
-    # Format address
+    # === Format shipping address ===
     shipping = order.get('shipping_address', {})
     address_lines = filter(None, [
-        name,
         shipping.get('address1'),
         shipping.get('address2'),
         f"{shipping.get('city', '')}, {shipping.get('province_code', '')} {shipping.get('zip', '')}",
         "US",
         f"Phone: {shipping.get('phone', '')}"
     ])
+
     address_str = '  '.join(address_lines)
 
+    # === Final formatted row ===
     return [
         str(order.get('id')),
         f"#{order.get('order_number')}",
-        name,
+        customer_name,
+        shipping_name,
         '; '.join(trays),
         '; '.join(addons),
         date_str,
@@ -215,11 +229,11 @@ def format_order_row(order):
         address_str,
         attrs.get('Delivery Fee', ''),
         attrs.get('Favor Tag', ''),
-        '; '.join(items)
+        tip_amount,
+        '; '.join(items),
+        financial_status,
+        fulfillment_status,
     ]
-
-
-
 
 
 # === UPLOAD TO SHEETS ===
@@ -401,10 +415,6 @@ def main():
     prune_old_tabs(sheet_service, SPREADSHEET_ID, recent_only)
 
     print("✅ All done.")
-
-
-
-
 
 if __name__ == "__main__":
     print("Running order sync...")
