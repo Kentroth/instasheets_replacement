@@ -379,15 +379,12 @@ def main():
             continue
 
         try:
-            date_obj = datetime.strptime(raw_date.replace('/', '-'), "%Y-%m-%d")
+            date_obj = datetime.strptime(raw_date.replace('/', '-'), "%m-%d-%Y")
         except ValueError:
-            try:
-                date_obj = datetime.strptime(raw_date.replace('/', '-'), "%m-%d-%Y")
-            except ValueError:
-                print(f"⚠️ Skipping order #{order['order_number']} due to invalid date format: {raw_date}")
-                continue
+            print(f"⚠️ Skipping order #{order['order_number']} due to invalid date format: {raw_date}")
+            continue
 
-        date_str = date_obj.strftime("%Y-%m-%d")
+        date_str = date_obj.strftime("%m-%d-%Y")  # Match tagged format
         print(f"  ✓ Match: Order #{order['order_number']} for date {date_str}")
 
         if date_str not in rows_by_day:
@@ -395,6 +392,7 @@ def main():
         rows_by_day[date_str].append(row)
         valid_tab_names.add(date_str)
         match_count += 1
+
 
     print(f"\nTotal matching orders: {match_count}")
 
