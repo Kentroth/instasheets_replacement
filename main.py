@@ -126,11 +126,59 @@ def format_order_row(order):
     items = [f"{li['quantity']} x {li['title']}" for li in line_items]
 
     def is_tray(title):
-        title = title.upper()
-        return any(keyword in title for keyword in ["DINNER", "TRAY", "GIFT", "TABLE"])
+        title = title.upper().strip()
 
+        tray_exact_matches = {
+            "CHEESE-Y DINNER FOR 2",
+            "CHEESE + MEAT (L)",
+            "CHEESE + MEAT (S)",
+            "CHEESE + MEAT + TREATS (L)",
+            "CHEESE + MEAT + TREATS (S)",
+            "READY TO SERVE GRAZING TABLE (L) SERVES 50+",
+            "READY TO SERVE GRAZING TABLE (S) SERVES 30+",
+            "CHARCUTERIE \"CURED MEAT\" PLATTER",
+            "CURED MEAT PLATTER",
+            "BREAD & CRACKER PLATTER",
+            "GLUTEN FREE CRACKER TRAY",
+            "DESSERT TRAY",
+            "THANKSGIVING CHEESE & CHARCUTERIE TRAY (L)",
+            "THANKSGIVING CHEESE & CHARCUTERIE TRAY (S)",
+            "HOLIDAY CHEESE & CHARCUTERIE TRAY (L)",
+            "HOLIDAY CHEESE & CHARCUTERIE TRAY (S)",
+            "VEGETARIAN CHEESE TRAY (L)",
+            "VEGETARIAN CHEESE TRAY (S)",
+            "PASTEURIZED CHEESE TRAY (L)",
+            "PASTEURIZED CHEESE TRAY (S)",
+            "VEGETARIAN & PASTEURIZED CHEESE TRAY (L)",
+            "VEGETARIAN & PASTEURIZED CHEESE TRAY (S)",
+            "EASTER TRAY (L)",
+            "EASTER TRAY (S)",
+            "FATHER'S DAY TRAY (L)",
+            "FATHER'S DAY TRAY (S)",
+            "MOTHER'S DAY TRAY (L)",
+            "MOTHER'S DAY TRAY (S)",
+            "CHAR-BOO-TERIE!  SPOOKY CHEESE + MEAT + TREATS (S) (10/24-10/31)",
+            "CHAR-CUTE-TERIE!  HEART(Y) VALENTINE'S DAY CHEESE TRAY - MY LOVE DESERVES NOTHING LESS!",
+            "CHAR-CUTE-TERIE!  HEART(Y) VALENTINE'S DAY CHEESE TRAY - NO, THANK YOU"
+        }
+
+        tray_partial_keywords = [
+            "TRAY",
+            "PLATTER",
+            "GRAZING TABLE",
+            "SNACK PACK"
+        ]
+
+        # Exact match
+        if title in tray_exact_matches:
+            return True
+
+        # Keyword fallback
+        return any(keyword in title for keyword in tray_partial_keywords)
+    
     trays = [f"{li['quantity']} x {li['title']}" for li in line_items if is_tray(li['title'])]
     addons = [f"{li['quantity']} x {li['title']}" for li in line_items if not is_tray(li['title'])]
+
 
     # Determine delivery vs pickup
     is_delivery = 'Delivery-Location-Id' in attrs
