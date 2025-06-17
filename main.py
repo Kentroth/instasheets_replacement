@@ -380,7 +380,7 @@ def main():
                 print(f"⚠️ Skipping order #{order['order_number']} due to invalid date format: {raw_date}")
                 continue
 
-        date_str = date_obj.strftime("%Y-%m-%d")
+        date_str = date_obj.strftime("%m-%d")
         print(f"  ✓ Match: Order #{order['order_number']} for date {date_str}")
 
         if date_str not in rows_by_day:
