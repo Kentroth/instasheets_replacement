@@ -95,12 +95,15 @@ def fetch_shopify_orders_streaming():
 def matches_criteria(order):
     tag_date = None
 
-    # Look for a tag matching MM-DD-YYYY
     for tag in order.get("tags", "").split(","):
         tag = tag.strip()
-        if re.match(r"\d{2}-\d{2}-\d{4}", tag):
+
+        # Find date anywhere in the tag (e.g., "11-18-2021, 14:00, Duval")
+        date_match = re.search(r"\d{2}[-/]\d{2}[-/]\d{4}", tag)
+        if date_match:
+            raw_date = date_match.group().replace('/', '-')
             try:
-                tag_date = datetime.strptime(tag, "%m-%d-%Y")
+                tag_date = datetime.strptime(raw_date, "%m-%d-%Y")
                 break
             except ValueError:
                 continue
@@ -108,9 +111,9 @@ def matches_criteria(order):
     if not tag_date:
         return False
 
-    # Check if tag_date is within 31 days of today
-    delta_days = abs((datetime.now() - tag_date).days)
-    return delta_days <= 31
+    # Check if date is within 31 days of today
+    return abs((datetime.now() - tag_date).days) <= 31
+
 
 
 def format_order_row(order):
