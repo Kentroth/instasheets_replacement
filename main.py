@@ -235,6 +235,7 @@ def format_order_row(order):
         '; '.join(items),
         financial_status,
         fulfillment_status,
+        order.get('tags', '') 
     ]
 
 
@@ -357,7 +358,7 @@ def main():
     'Transaction ID', 'Order #', 'Customer Name', 'Shipping Name', 'Trays/Gifts', 'Add-ons',
     'Date', 'Time', 'Amount', 'Refunded', 'Gift Note', 'Special Requests', 'Location',
     'Pickup / Delivery', 'Address', 'Delivery Fee', 'Scheduled Delivery?', 'Tip Amount',
-    'All Items', 'Financial Status', 'Fulfillment Status'
+    'All Items', 'Financial Status', 'Fulfillment Status',"All Tags"
     ]
     rows_by_day = {}
     valid_tab_names = set()
@@ -411,6 +412,7 @@ def main():
         if date_str not in existing_titles:
             print(f"  Creating tab: {date_str}")
             duplicate_template(sheet_service, SPREADSHEET_ID, date_str)
+            time.sleep(1.2)
 
     # Upload all data to the correct tabs in sorted order
     print("\nUploading to Google Sheets...")
