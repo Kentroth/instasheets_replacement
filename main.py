@@ -212,6 +212,8 @@ def format_order_row(order):
 
     address_str = '  '.join(address_lines)
 
+    skus = [li.get('sku', '') for li in line_items if li.get('sku')]
+
     # === Final formatted row ===
     return [
         str(order.get('id')),
@@ -235,7 +237,8 @@ def format_order_row(order):
         '; '.join(items),
         financial_status,
         fulfillment_status,
-        order.get('tags', '') 
+        order.get('tags', ''),
+        '; '.join(skus)
     ]
 
 
@@ -358,7 +361,7 @@ def main():
     'Transaction ID', 'Order #', 'Customer Name', 'Shipping Name', 'Trays/Gifts', 'Add-ons',
     'Date', 'Time', 'Amount', 'Refunded', 'Gift Note', 'Special Requests', 'Location',
     'Pickup / Delivery', 'Address', 'Delivery Fee', 'Scheduled Delivery?', 'Tip Amount',
-    'All Items', 'Financial Status', 'Fulfillment Status',"All Tags"
+    'All Items', 'Financial Status', 'Fulfillment Status','All Tags','All SKUs'
     ]
     rows_by_day = {}
     valid_tab_names = set()
