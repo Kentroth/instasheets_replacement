@@ -227,7 +227,7 @@ def format_order_row(order):
         order.get('total_price', ''),
         '',  # Placeholder for manual override column or similar
         attrs.get('Gift Note', ''),
-        attrs.get('Special Requests', ''),
+        order.get('note', ''),
         attrs.get('Delivery-Location-Id') or attrs.get('Pickup-Location-Id'),
         delivery_type,
         address_str,
